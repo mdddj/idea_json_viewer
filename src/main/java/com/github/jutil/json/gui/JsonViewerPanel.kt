@@ -1,346 +1,239 @@
-package com.github.jutil.json.gui;
+package com.github.jutil.json.gui
 
-import java.awt.BorderLayout;
-import java.awt.Color;
-import java.awt.event.ActionEvent;
-import java.awt.event.KeyEvent;
-import java.io.File;
+import com.fasterxml.jackson.core.JsonProcessingException
+import com.github.jutil.core.gui.AbstractPanel
+import com.github.jutil.core.gui.ExtendedTextPane
+import com.github.jutil.core.gui.GuiUtils
+import com.github.jutil.gui.GuiConstants
+import com.google.gson.JsonSyntaxException
+import org.apache.commons.lang3.StringUtils
+import org.fife.ui.rsyntaxtextarea.SyntaxConstants
+import org.fife.ui.rtextarea.RTextArea
+import org.fife.ui.rtextarea.SearchContext
+import org.fife.ui.rtextarea.SearchEngine
+import org.slf4j.LoggerFactory
+import java.awt.BorderLayout
+import java.awt.Color
+import java.awt.event.ActionEvent
+import java.awt.event.KeyEvent
+import java.io.File
+import javax.swing.*
+import javax.swing.event.DocumentEvent
+import javax.swing.event.DocumentListener
 
-import javax.swing.AbstractAction;
-import javax.swing.Icon;
-import javax.swing.ImageIcon;
-import javax.swing.JButton;
-import javax.swing.JFileChooser;
-import javax.swing.JLabel;
-import javax.swing.JOptionPane;
-import javax.swing.JPanel;
-import javax.swing.JTextField;
-import javax.swing.Timer;
-import javax.swing.UIManager;
-import javax.swing.event.DocumentEvent;
-import javax.swing.event.DocumentListener;
+class JsonViewerPanel : AbstractPanel() {
+    private val jsonIndicator = JLabel()
+    private var validJsonIcon: Icon? = null
+    private var invalidJsonIcon: Icon? = null
+    private var textPane: ExtendedTextPane? = null
+    private var searchField: JTextField? = null
+    private val timer: Timer
+    private val msgLabel = JLabel()
+    private val msgPanel = JPanel()
+    private var lastDirectory: File? = null
 
-import org.apache.commons.lang3.StringUtils;
-import org.fife.ui.rsyntaxtextarea.SyntaxConstants;
-import org.fife.ui.rtextarea.RTextArea;
-import org.fife.ui.rtextarea.RTextScrollPane;
-import org.fife.ui.rtextarea.SearchContext;
-import org.fife.ui.rtextarea.SearchEngine;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import com.fasterxml.jackson.core.JsonLocation;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.github.jutil.core.gui.AbstractPanel;
-import com.github.jutil.core.gui.ExtendedTextPane;
-import com.github.jutil.core.gui.GuiUtils;
-import com.github.jutil.gui.GuiConstants;
-import com.google.gson.JsonSyntaxException;
-
-public class JsonViewerPanel extends AbstractPanel {
-
-    private static final long serialVersionUID = 7554118114747990205L;
-
-    private static final Logger LOGGER = LoggerFactory.getLogger(JsonViewerPanel.class);
-
-    private static final JsonViewerPanel INSTANCE = new JsonViewerPanel();
-
-    public static JsonViewerPanel getInstance() {
-
-        return INSTANCE;
+    init {
+        init()
+        timer = Timer(GuiConstants.DEFAULT_DELAY_MS) { e: ActionEvent? -> validateJson() }
+        timer.isRepeats = false
     }
 
-    private JLabel jsonIndicator = new JLabel();
-    private Icon validJsonIcon;
-    private Icon invalidJsonIcon;
-
-    private ExtendedTextPane textPane;
-    private JTextField searchField;
-
-    private Timer timer;
-
-    private JLabel msgLabel = new JLabel();
-    private JPanel msgPanel = new JPanel();
-
-    private File lastDirectory;
-
-    public JsonViewerPanel() {
-
-        init();
-
-        timer = new Timer(GuiConstants.DEFAULT_DELAY_MS, (e) -> validateJson());
-        timer.setRepeats(false);
-
-    }
-
-    private void init() {
-
-        setSize(getMaximumSize());
-        setLayout(new BorderLayout());
-
-        JPanel settingPanel = new JPanel();
-        settingPanel.add(jsonIndicator);
-        settingPanel.add(getLoadFileButton());
-        settingPanel.add(getFormatButton());
-        settingPanel.add(getDeformatButton());
-        settingPanel.add(new JLabel("Search"));
-        settingPanel.add(searchField = getSearchField());
-        settingPanel.add(msgLabel);
-
-        msgPanel.add(msgLabel);
-
-        JPanel topPanel = new JPanel(new BorderLayout());
-        topPanel.add(settingPanel, BorderLayout.NORTH);
-        topPanel.add(msgPanel, BorderLayout.CENTER);
-        add(topPanel, BorderLayout.NORTH);
-
-        RTextScrollPane scrollPane = GuiUtils.getScrollTextPane(SyntaxConstants.SYNTAX_STYLE_JSON);
-        textPane = (ExtendedTextPane) scrollPane.getTextArea();
-
-        textPane.setCodeFoldingEnabled(true);
-        textPane.setHighlightCurrentLine(true);
+    private fun init() {
+        size = maximumSize
+        layout = BorderLayout()
+        val settingPanel = JPanel()
+        settingPanel.add(jsonIndicator)
+        settingPanel.add(loadFileButton)
+        settingPanel.add(formatButton)
+        settingPanel.add(deformatButton)
+        settingPanel.add(JLabel("Search"))
+        settingPanel.add(getSearchField().also { searchField = it })
+        settingPanel.add(msgLabel)
+        msgPanel.add(msgLabel)
+        val topPanel = JPanel(BorderLayout())
+        topPanel.add(settingPanel, BorderLayout.NORTH)
+        topPanel.add(msgPanel, BorderLayout.CENTER)
+        add(topPanel, BorderLayout.NORTH)
+        val scrollPane = GuiUtils.getScrollTextPane(SyntaxConstants.SYNTAX_STYLE_JSON)
+        textPane = scrollPane.textArea as ExtendedTextPane
+        textPane!!.isCodeFoldingEnabled = true
+        textPane!!.highlightCurrentLine = true
         // textPane.setAutoIndentEnabled(true);
         // textPane.setHyperlinksEnabled(true);
-        textPane.setBracketMatchingEnabled(true);
-        textPane.setPaintMatchedBracketPair(true);
-
-        GuiUtils.applyShortcut(textPane, KeyEvent.VK_L, "lineNumber", new AbstractAction() {
-
-            private static final long serialVersionUID = -506406567119696504L;
-
-            @Override
-            public void actionPerformed(ActionEvent e) {
-
+        textPane!!.isBracketMatchingEnabled = true
+        textPane!!.paintMatchedBracketPair = true
+        GuiUtils.applyShortcut(textPane, KeyEvent.VK_L, "lineNumber", object : AbstractAction() {
+            override fun actionPerformed(e: ActionEvent) {
                 try {
-
-                    textPane.setCaretLineNumber(Integer.parseInt((String) JOptionPane.showInputDialog(
-                            JsonViewerPanel.this, String.format("Enter Line Number (1, %d)", textPane.getLineCount()),
-                            "Go to Line", JOptionPane.PLAIN_MESSAGE, null, null,
-                            Integer.toString(textPane.getCaretLineNumber() + 1))));
-                } catch (NumberFormatException ex) {
-                    UIManager.getLookAndFeel().provideErrorFeedback(JsonViewerPanel.this);
-                } catch (Exception ex) {
-                    UIManager.getLookAndFeel().provideErrorFeedback(JsonViewerPanel.this);
-                    LOGGER.warn("excption while taking line number as input", ex);
+                    textPane!!.caretLineNumber = JOptionPane.showInputDialog(
+                        this@JsonViewerPanel, String.format("Enter Line Number (1, %d)", textPane!!.lineCount),
+                        "Go to Line", JOptionPane.PLAIN_MESSAGE, null, null,
+                        (textPane!!.caretLineNumber + 1).toString()
+                    ) as Int
+                } catch (ex: NumberFormatException) {
+                    UIManager.getLookAndFeel().provideErrorFeedback(this@JsonViewerPanel)
+                } catch (ex: Exception) {
+                    UIManager.getLookAndFeel().provideErrorFeedback(this@JsonViewerPanel)
+                    LOGGER.warn("excption while taking line number as input", ex)
                 }
             }
-        });
-
-        textPane.getDocument().addDocumentListener(new DocumentListener() {
-
-            @Override
-            public void removeUpdate(DocumentEvent e) {
-
-                timer.restart();
+        })
+        textPane!!.document.addDocumentListener(object : DocumentListener {
+            override fun removeUpdate(e: DocumentEvent) {
+                timer.restart()
             }
 
-            @Override
-            public void insertUpdate(DocumentEvent e) {
-
-                timer.restart();
+            override fun insertUpdate(e: DocumentEvent) {
+                timer.restart()
             }
 
-            @Override
-            public void changedUpdate(DocumentEvent e) {
-
-            }
-        });
-        add(scrollPane, BorderLayout.CENTER);
-
-        validJsonIcon = new ImageIcon(getClass().getResource("/tick.png"));
-        invalidJsonIcon = new ImageIcon(getClass().getResource("/error.png"));
-
+            override fun changedUpdate(e: DocumentEvent) {}
+        })
+        add(scrollPane, BorderLayout.CENTER)
+        validJsonIcon = ImageIcon(javaClass.getResource("/tick.png"))
+        invalidJsonIcon = ImageIcon(javaClass.getResource("/error.png"))
     }
 
-    private void loadFile() {
-
-        JFileChooser fileChooser = new JFileChooser(lastDirectory);
+    private fun loadFile() {
+        val fileChooser = JFileChooser(lastDirectory)
         if (fileChooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
-            lastDirectory = fileChooser.getCurrentDirectory();
-            readFile(fileChooser.getSelectedFile());
+            lastDirectory = fileChooser.currentDirectory
+            readFile(fileChooser.selectedFile)
         }
     }
 
-    private void validateJson() {
-
-        String text = textPane.getText();
+    private fun validateJson() {
+        val text = textPane!!.text
         if (StringUtils.isBlank(text)) {
-            jsonIndicator.setIcon(null);
-            msgPanel.setVisible(false);
-            return;
+            jsonIndicator.icon = null
+            msgPanel.isVisible = false
+            return
         }
-
         try {
-            GuiUtils.validateJson(text);
-            msgPanel.setVisible(false);
-            jsonIndicator.setIcon(validJsonIcon);
-        } catch (Exception e) {
-            jsonIndicator.setIcon(invalidJsonIcon);
-            popup(e);
+            GuiUtils.validateJson(text)
+            msgPanel.isVisible = false
+            jsonIndicator.icon = validJsonIcon
+        } catch (e: Exception) {
+            jsonIndicator.icon = invalidJsonIcon
+            popup(e)
         }
     }
 
-    private void toSimpleJson() {
-
-        String text = textPane.getText();
+    private fun toSimpleJson() {
+        val text = textPane!!.text
         if (StringUtils.isBlank(text)) {
-            return;
+            return
         }
-
         try {
-            textPane.setText(GuiUtils.toSimpleJson(text));
-            msgPanel.setVisible(false);
-        } catch (Exception e) {
-            popup(e);
+            textPane!!.text = GuiUtils.toSimpleJson(text)
+            msgPanel.isVisible = false
+        } catch (e: Exception) {
+            popup(e)
         }
     }
 
-    private void toPrettyJson() {
-
-        String text = textPane.getText();
+    private fun toPrettyJson() {
+        val text = textPane!!.text
         if (StringUtils.isBlank(text)) {
-            return;
+            return
         }
-
         try {
-            textPane.setText(GuiUtils.toPrettyJson(text));
-            msgPanel.setVisible(false);
-        } catch (Exception e) {
-            popup(e);
+            textPane!!.text = GuiUtils.toPrettyJson(text)
+            msgPanel.isVisible = false
+        } catch (e: Exception) {
+            popup(e)
         }
     }
 
-    private void readFile(File selectedFile) {
-
+    private fun readFile(selectedFile: File) {
         try {
-            textPane.setText(GuiUtils.readFile(selectedFile));
-        } catch (Exception e) {
-            popup(e);
+            textPane!!.text = GuiUtils.readFile(selectedFile)
+        } catch (e: Exception) {
+            popup(e)
         }
     }
 
-    private void findInJson() {
-
-        String findText = searchField.getText();
-
-        SearchContext context = new SearchContext(findText);
+    private fun findInJson() {
+        val findText = searchField!!.text
+        val context = SearchContext(findText)
         if (!SearchEngine.find(textPane, context).wasFound()) {
-            UIManager.getLookAndFeel().provideErrorFeedback(JsonViewerPanel.this);
+            UIManager.getLookAndFeel().provideErrorFeedback(this@JsonViewerPanel)
         }
-        RTextArea.setSelectedOccurrenceText(findText);
+        RTextArea.setSelectedOccurrenceText(findText)
     }
 
-    private JButton getLoadFileButton() {
-
-        JButton loadFileButton = new JButton("Open File");
-        loadFileButton.setToolTipText("loads contents from file");
-        GuiUtils.applyShortcut(loadFileButton, KeyEvent.VK_O, "Open", new AbstractAction() {
-
-            private static final long serialVersionUID = 1235235L;
-
-            @Override
-            public void actionPerformed(ActionEvent e) {
-
-                loadFile();
-
-            }
-        });
-        loadFileButton.addActionListener(e -> {
-
-            loadFile();
-        });
-        return loadFileButton;
-    }
-
-    private JButton getFormatButton() {
-
-        JButton formatButton = new JButton("Format");
-        formatButton.setToolTipText("formats the input provided");
-        GuiUtils.applyShortcut(formatButton, KeyEvent.VK_Q, "Format", new AbstractAction() {
-
-            private static final long serialVersionUID = 123523535L;
-
-            @Override
-            public void actionPerformed(ActionEvent e) {
-
-                toPrettyJson();
-            }
-        });
-        formatButton.addActionListener(e -> {
-            toPrettyJson();
-        });
-        return formatButton;
-
-    }
-
-    private JButton getDeformatButton() {
-
-        JButton deformatButton = new JButton("DeFormat");
-        deformatButton.setToolTipText("compresses json, should be used to send compressed data over networks");
-        GuiUtils.applyShortcut(deformatButton, KeyEvent.VK_W, "Deformat", new AbstractAction() {
-
-            private static final long serialVersionUID = 12352003535L;
-
-            @Override
-            public void actionPerformed(ActionEvent e) {
-
-                toSimpleJson();
-
-            }
-        });
-        deformatButton.addActionListener(e -> {
-
-            toSimpleJson();
-        });
-        return deformatButton;
-    }
-
-    private JTextField getSearchField() {
-
-        JTextField searchField = new JTextField(10);
-        searchField.setToolTipText("CTRL+K (fwd) CTRL+SHIFT+K (bkd)");
-        GuiUtils.applyShortcut(searchField, KeyEvent.VK_F, "Find", new AbstractAction() {
-
-            private static final long serialVersionUID = 12352311535L;
-
-            @Override
-            public void actionPerformed(ActionEvent e) {
-
-                searchField.requestFocusInWindow();
-
-            }
-        });
-        searchField.addActionListener(e -> {
-
-            findInJson();
-        });
-        return searchField;
-    }
-
-    private void popup(Exception e) {
-
-        LOGGER.warn("Exception occurred", e);
-
-        StringBuilder filteredMsg = new StringBuilder();
-        if (e instanceof JsonProcessingException) {
-            JsonProcessingException jpe = (JsonProcessingException) e;
-            filteredMsg.append(jpe.getOriginalMessage());
-            JsonLocation location = jpe.getLocation();
-            String locationStr = String.format(" at line %d col %d", location.getLineNr(), location.getColumnNr());
-            filteredMsg.append(locationStr);
+    private val loadFileButton: JButton
+        private get() {
+            val loadFileButton = JButton("Open File")
+            loadFileButton.toolTipText = "loads contents from file"
+            GuiUtils.applyShortcut(loadFileButton, KeyEvent.VK_O, "Open", object : AbstractAction() {
+                override fun actionPerformed(e: ActionEvent) {
+                    loadFile()
+                }
+            })
+            loadFileButton.addActionListener { e: ActionEvent? -> loadFile() }
+            return loadFileButton
         }
-        else if (e instanceof JsonSyntaxException) {
-
-            String msg = StringUtils.substringAfter(e.getMessage(), "Exception: ");
-            filteredMsg.append(msg);
+    private val formatButton: JButton
+        private get() {
+            val formatButton = JButton("Format")
+            formatButton.toolTipText = "formats the input provided"
+            GuiUtils.applyShortcut(formatButton, KeyEvent.VK_Q, "Format", object : AbstractAction() {
+                override fun actionPerformed(e: ActionEvent) {
+                    toPrettyJson()
+                }
+            })
+            formatButton.addActionListener { e: ActionEvent? -> toPrettyJson() }
+            return formatButton
+        }
+    private val deformatButton: JButton
+        get() {
+            val deformatButton = JButton("DeFormat")
+            deformatButton.toolTipText = "compresses json, should be used to send compressed data over networks"
+            GuiUtils.applyShortcut(deformatButton, KeyEvent.VK_W, "Deformat", object : AbstractAction() {
+                override fun actionPerformed(e: ActionEvent) {
+                    toSimpleJson()
+                }
+            })
+            deformatButton.addActionListener { e: ActionEvent? -> toSimpleJson() }
+            return deformatButton
         }
 
-        else {
-            filteredMsg.append(e.getMessage());
-        }
+    private fun getSearchField(): JTextField {
+        val searchField = JTextField(10)
+        searchField.toolTipText = "CTRL+K (fwd) CTRL+SHIFT+K (bkd)"
+        GuiUtils.applyShortcut(searchField, KeyEvent.VK_F, "Find", object : AbstractAction() {
+            override fun actionPerformed(e: ActionEvent) {
+                searchField.requestFocusInWindow()
+            }
+        })
+        searchField.addActionListener { e: ActionEvent? -> findInJson() }
+        return searchField
+    }
 
-        msgLabel.setText(filteredMsg.toString());
-        msgLabel.setForeground(Color.RED);
-        msgPanel.setVisible(true);
+    private fun popup(e: Exception) {
+        LOGGER.warn("Exception occurred", e)
+        val filteredMsg = StringBuilder()
+        if (e is JsonProcessingException) {
+            val jpe = e
+            filteredMsg.append(jpe.originalMessage)
+            val location = jpe.location
+            val locationStr = String.format(" at line %d col %d", location.lineNr, location.columnNr)
+            filteredMsg.append(locationStr)
+        } else if (e is JsonSyntaxException) {
+            val msg = StringUtils.substringAfter(e.message, "Exception: ")
+            filteredMsg.append(msg)
+        } else {
+            filteredMsg.append(e.message)
+        }
+        msgLabel.text = filteredMsg.toString()
+        msgLabel.foreground = Color.RED
+        msgPanel.isVisible = true
+    }
+
+    companion object {
+        private const val serialVersionUID = 7554118114747990205L
+        private val LOGGER = LoggerFactory.getLogger(JsonViewerPanel::class.java)
+        val instance = JsonViewerPanel()
     }
 }

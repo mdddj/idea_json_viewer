@@ -1,18 +1,15 @@
-package com.github.jutil.core.gui;
+package com.github.jutil.core.gui
 
-import javax.swing.BorderFactory;
-import javax.swing.JPanel;
+import javax.swing.BorderFactory
+import javax.swing.JPanel
 
-
-public class AbstractPanel extends JPanel {
-
-    private static final long serialVersionUID = -5139768247575572270L;
-    
-    public AbstractPanel() {
-        
-        setSize(getMaximumSize());
-        setBorder(BorderFactory.createEmptyBorder(5, 20, 20, 20));
-        
+open class AbstractPanel : JPanel() {
+    init {
+        size = maximumSize
+        border = BorderFactory.createEmptyBorder(5, 20, 20, 20)
     }
-    
+
+    companion object {
+        private const val serialVersionUID = -5139768247575572270L
+    }
 }

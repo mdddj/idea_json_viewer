@@ -1,43 +1,33 @@
-package com.github.jutil.core.gui;
+package com.github.jutil.core.gui
 
-import javax.swing.text.BadLocationException;
-import javax.swing.text.Element;
+import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea
+import javax.swing.text.BadLocationException
 
-import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
-
-public class ExtendedTextPane extends RSyntaxTextArea {
-
-    private static final long serialVersionUID = -2461865660916776135L;
-
-    public ExtendedTextPane() {
-
-        super();
-
-    }
-
+class ExtendedTextPane : RSyntaxTextArea() {
     /**
      * method to set caret position at start of the specified line
-     * 
+     *
      * @param line
      */
-    public void setCaretLineNumber(int line) throws BadLocationException {
-
-        Element rootElement = getDocument().getDefaultRootElement();
-        if(line < 1 || line > rootElement.getElementCount()) {
-            throw new BadLocationException("invalid line number", line);
+    @Throws(BadLocationException::class)
+    fun setCaretLineNumber(line: Int) {
+        val rootElement = document.defaultRootElement
+        if (line < 1 || line > rootElement.elementCount) {
+            throw BadLocationException("invalid line number", line)
         }
-
-        int offset = rootElement.getElement(line - 1).getStartOffset();
-        setCaretPosition(offset);
+        val offset = rootElement.getElement(line - 1).startOffset
+        caretPosition = offset
     }
 
     /**
      * Method to get line count in current textpane
-     * 
+     *
      */
-    public int getLineCount() {
-
-        return getDocument().getDefaultRootElement().getElementCount();
+    override fun getLineCount(): Int {
+        return document.defaultRootElement.elementCount
     }
 
+    companion object {
+        private const val serialVersionUID = -2461865660916776135L
+    }
 }
